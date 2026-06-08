@@ -1,3 +1,4 @@
+import math
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 import pandas as pd
@@ -15,7 +16,7 @@ ctk.set_default_color_theme("blue")
 # 2. Create a hybrid window class to combine CustomTkinter with Drag and Drop
 class CTkWindowWithDnD(ctk.CTk, TkinterDnD.DnDWrapper):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        ctk.CTk.__init__(self, *args, **kwargs)
         self.TkdndVersion = TkinterDnD._require(self)
 
 # 3. Inherit from the new hybrid class instead of ctk.CTk
@@ -23,70 +24,330 @@ class CSVPlotterApp(CTkWindowWithDnD):
     def __init__(self):
         super().__init__()
         
-        self.title("CSV Data Plotter")
-        self.geometry("500x650")
+        self.title("Análisis de Señales - Osciloscopio")
+        self.geometry("600x720")
         
-        self.file_path = ""
-        self.signal_inputs = []  # Lista para guardar los widgets de cada señal
+        self.time_file_path = ""
+        self.freq_file_path = ""
+        self.time_signal_inputs = []
+        self.freq_signal_inputs = []
+        self.unit_multipliers = {
+            "s": 1, "ms": 1e3, "µs": 1e6, "ns": 1e9, "ps": 1e12,
+            "V": 1, "mV": 1e3, "µV": 1e6, "nV": 1e9
+        }
         
-        # --- UI Elements ---
-        self.label = ctk.CTkLabel(self, text="Selecciona o arrastra un archivo CSV aquí", font=("Arial", 16, "bold"))
-        self.label.pack(pady=10)
+        # --- Pantalla de Selección Inicial ---
+        self.selection_frame = ctk.CTkFrame(self)
+        self.selection_frame.pack(fill="both", expand=True)
+        
+        ctk.CTkLabel(self.selection_frame, text="¿Qué tipo de análisis desea realizar?", 
+                     font=("Arial", 18, "bold")).pack(pady=40)
+        
+        self.btn_time = ctk.CTkButton(self.selection_frame, text="Respuesta en Tiempo", 
+                                      command=lambda: self.select_mode("Tiempo"), width=200, height=50)
+        self.btn_time.pack(pady=10)
+        
+        self.btn_freq = ctk.CTkButton(self.selection_frame, text="Respuesta en Frecuencia", 
+                                      command=lambda: self.select_mode("Frecuencia"), width=200, height=50)
+        self.btn_freq.pack(pady=10)
+
+        # --- Contenedor de Pestañas (Oculto al inicio) ---
+        self.tabview = ctk.CTkTabview(self)
+        self.tab_time = self.tabview.add("Respuesta en Tiempo")
+        self.tab_freq = self.tabview.add("Respuesta en Frecuencia")
+        
+        self.setup_time_response_ui(self.tab_time)
+        self.setup_freq_response_ui(self.tab_freq)
+
+        # --- 4. Drag and Drop Setup ---
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind('<<Drop>>', self.handle_drop)
+
+        # Vincular la tecla Enter para generar el gráfico automáticamente
+        self.bind("<Return>", self.on_enter_pressed)
+
+    def on_enter_pressed(self, event):
+        """Maneja la ejecución del gráfico al presionar Enter."""
+        # Solo actuar si ya pasamos la pantalla de selección inicial
+        if not self.tabview.winfo_ismapped():
+            return
+            
+        current_tab = self.tabview.get()
+        if current_tab == "Respuesta en Tiempo" and self.time_plot_btn.cget("state") == "normal":
+            self.plot_data()
+        elif current_tab == "Respuesta en Frecuencia" and self.freq_plot_btn.cget("state") == "normal":
+            self.plot_freq_data()
+
+    def select_mode(self, mode):
+        """Cambia de la pantalla de selección a las pestañas"""
+        self.selection_frame.pack_forget()
+        self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
+        if mode == "Tiempo":
+            self.tabview.set("Respuesta en Tiempo")
+        else:
+            self.tabview.set("Respuesta en Frecuencia")
+
+    def setup_time_response_ui(self, parent):
+        """Configura la interfaz original de respuesta en tiempo dentro de un parent"""
+        self.time_label = ctk.CTkLabel(parent, text="Selecciona o arrastra un archivo CSV aquí", font=("Arial", 16, "bold"))
+        self.time_label.pack(pady=10)
         
         # Button to browse for file
-        self.browse_btn = ctk.CTkButton(self, text="Buscar CSV", command=self.browse_file)
-        self.browse_btn.pack(pady=5)
+        self.time_browse_btn = ctk.CTkButton(parent, text="Buscar CSV", command=self.browse_file)
+        self.time_browse_btn.pack(pady=5)
         
         # Label to show selected file path
-        self.path_label = ctk.CTkLabel(self, text="No fue seleccionado ningún archivo", font=("Arial", 10, "italic"), text_color="gray")
-        self.path_label.pack(pady=5)
+        self.time_path_label = ctk.CTkLabel(parent, text="No fue seleccionado ningún archivo", font=("Arial", 10, "italic"), text_color="gray")
+        self.time_path_label.pack(pady=5)
         
         # Frame con scroll para los parámetros de cada señal
-        self.scroll_frame = ctk.CTkScrollableFrame(self, width=450, height=300, label_text="Configuración por Señal")
-        self.scroll_frame.pack(pady=10, padx=10)
+        self.time_scroll_frame = ctk.CTkScrollableFrame(parent, width=500, height=180, label_text="Configuración por Señal")
+        self.time_scroll_frame.pack(pady=5, padx=10)
         
-        # Frame para opciones de visualización (Escalas logarítmicas)
-        self.options_frame = ctk.CTkFrame(self)
-        self.options_frame.pack(pady=5)
-        
+        # Frame para opciones de visualización
+        self.time_options_frame = ctk.CTkScrollableFrame(parent, height=105, label_text="Opciones del Gráfico")
+        self.time_options_frame.pack(pady=2, padx=10, fill="x")
+        self.time_options_frame.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1, uniform="col")
+
+        # Row 0: Title
+        title_row_frame = ctk.CTkFrame(self.time_options_frame, fg_color="transparent")
+        title_row_frame.grid(row=0, column=0, columnspan=6, pady=2)
+        ctk.CTkLabel(title_row_frame, text="Título:").pack(side="left", padx=5)
+        self.title_entry = ctk.CTkEntry(title_row_frame, width=200, placeholder_text="Nombre del gráfico...")
+        self.title_entry.insert(0, "Osciloscopio - Señales")
+        self.title_entry.pack(side="left", padx=5)
+
+        # Row 1: All checkboxes + grid width in one row
         self.log_x_var = ctk.BooleanVar(value=False)
-        self.log_x_check = ctk.CTkCheckBox(self.options_frame, text="Eje X SymLog", variable=self.log_x_var)
-        self.log_x_check.grid(row=0, column=0, padx=10)
-        
+        ctk.CTkCheckBox(self.time_options_frame, text="Eje X Log", variable=self.log_x_var).grid(row=1, column=0, padx=5, pady=4)
+
         self.log_y_var = ctk.BooleanVar(value=False)
-        self.log_y_check = ctk.CTkCheckBox(self.options_frame, text="Eje Y SymLog", variable=self.log_y_var)
-        self.log_y_check.grid(row=0, column=1, padx=10)
+        ctk.CTkCheckBox(self.time_options_frame, text="Eje Y Log", variable=self.log_y_var).grid(row=1, column=1, padx=5, pady=4)
 
-        # Opciones de grilla
+        self.show_peaks_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(self.time_options_frame, text="Ver Max/Min", variable=self.show_peaks_var).grid(row=1, column=2, padx=5, pady=4)
+
+        self.show_cursors_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(self.time_options_frame, text="Ver Cursores", variable=self.show_cursors_var).grid(row=1, column=3, padx=5, pady=4)
+
         self.show_grid_var = ctk.BooleanVar(value=True)
-        self.show_grid_check = ctk.CTkCheckBox(self.options_frame, text="Ver Grilla", variable=self.show_grid_var)
-        self.show_grid_check.grid(row=1, column=0, padx=10, pady=5)
+        ctk.CTkCheckBox(self.time_options_frame, text="Ver Grilla", variable=self.show_grid_var).grid(row=1, column=4, padx=5, pady=4)
 
-        grid_width_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        grid_width_frame.grid(row=1, column=1, padx=10, pady=5)
+        grid_width_frame = ctk.CTkFrame(self.time_options_frame, fg_color="transparent")
+        grid_width_frame.grid(row=1, column=5, padx=5, pady=4)
         ctk.CTkLabel(grid_width_frame, text="Grosor:").pack(side="left")
         self.grid_width_entry = ctk.CTkEntry(grid_width_frame, width=50)
         self.grid_width_entry.insert(0, "0.6")
         self.grid_width_entry.pack(side="left", padx=5)
 
-        # Opciones de espaciado (tamaño de cuadriculas)
-        grid_spacing_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        grid_spacing_frame.grid(row=2, column=0, columnspan=2, pady=5)
-        ctk.CTkLabel(grid_spacing_frame, text="Div. X (µs):").pack(side="left")
-        self.grid_spacing_x_entry = ctk.CTkEntry(grid_spacing_frame, width=60)
+        # Row 2: Both axis scale settings in one row
+        scale_frame = ctk.CTkFrame(self.time_options_frame, fg_color="transparent")
+        scale_frame.grid(row=2, column=0, columnspan=6, pady=4)
+
+        ctk.CTkLabel(scale_frame, text="Eje X:").pack(side="left", padx=2)
+        self.unit_x_menu = ctk.CTkOptionMenu(scale_frame, values=["s", "ms", "µs", "ns", "ps"], width=75)
+        self.unit_x_menu.set("µs")
+        self.unit_x_menu.pack(side="left", padx=2)
+        ctk.CTkLabel(scale_frame, text="Div:").pack(side="left", padx=2)
+        self.grid_spacing_x_entry = ctk.CTkEntry(scale_frame, width=50)
         self.grid_spacing_x_entry.pack(side="left", padx=2)
-        ctk.CTkLabel(grid_spacing_frame, text=" Div. Y (mV):").pack(side="left")
-        self.grid_spacing_y_entry = ctk.CTkEntry(grid_spacing_frame, width=60)
+
+        ctk.CTkLabel(scale_frame, text="   Eje Y:").pack(side="left", padx=2)
+        self.unit_y_menu = ctk.CTkOptionMenu(scale_frame, values=["V", "mV", "µV", "nV"], width=75)
+        self.unit_y_menu.set("mV")
+        self.unit_y_menu.pack(side="left", padx=2)
+        ctk.CTkLabel(scale_frame, text="Div:").pack(side="left", padx=2)
+        self.grid_spacing_y_entry = ctk.CTkEntry(scale_frame, width=50)
         self.grid_spacing_y_entry.pack(side="left", padx=2)
 
-        # Button to plot data (disabled until a file is loaded)
-        self.plot_btn = ctk.CTkButton(self, text="Graficar datos", command=self.plot_data, state="disabled", fg_color="green")
-        self.plot_btn.pack(pady=15)
+        self.time_plot_btn = ctk.CTkButton(parent, text="Graficar datos", command=self.plot_data, state="disabled", fg_color="green")
+        self.time_plot_btn.pack(pady=15)
 
-        # --- 4. Drag and Drop Setup ---
-        # Register the whole window as a drop target for files
-        self.drop_target_register(DND_FILES)
-        self.dnd_bind('<<Drop>>', self.handle_drop)
+    def setup_freq_response_ui(self, parent):
+        """Configura la interfaz de respuesta en frecuencia (análoga a tiempo)"""
+        self.freq_label = ctk.CTkLabel(parent, text="Selecciona o arrastra un archivo CSV aquí", font=("Arial", 16, "bold"))
+        self.freq_label.pack(pady=10)
+        
+        self.freq_browse_btn = ctk.CTkButton(parent, text="Buscar CSV", command=self.browse_file)
+        self.freq_browse_btn.pack(pady=5)
+        
+        self.freq_path_label = ctk.CTkLabel(parent, text="No fue seleccionado ningún archivo", font=("Arial", 10, "italic"), text_color="gray")
+        self.freq_path_label.pack(pady=5)
+        
+        # Panel de Mapeo de Columnas (Indices desde 0)
+        mapping_frame = ctk.CTkFrame(parent)
+        mapping_frame.pack(pady=5, fill="x", padx=10)
+        mapping_frame.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        
+        ctk.CTkLabel(mapping_frame, text="Mapeo de Columnas (Índices desde 0):", 
+                     font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=6, pady=5)
+        
+        ctk.CTkLabel(mapping_frame, text="Freq:").grid(row=1, column=0, padx=2, sticky="e")
+        self.freq_col_idx = ctk.CTkEntry(mapping_frame, width=50); self.freq_col_idx.insert(0, "1")
+        self.freq_col_idx.grid(row=1, column=1, padx=2, sticky="w", pady=5)
+        
+        ctk.CTkLabel(mapping_frame, text="Gan:").grid(row=1, column=2, padx=2, sticky="e")
+        self.gain_col_idx = ctk.CTkEntry(mapping_frame, width=50); self.gain_col_idx.insert(0, "3")
+        self.gain_col_idx.grid(row=1, column=3, padx=2, sticky="w", pady=5)
+        
+        ctk.CTkLabel(mapping_frame, text="Fase:").grid(row=1, column=4, padx=2, sticky="e")
+        self.phase_col_idx = ctk.CTkEntry(mapping_frame, width=50); self.phase_col_idx.insert(0, "4")
+        self.phase_col_idx.grid(row=1, column=5, padx=2, sticky="w", pady=5)
+
+        self.freq_scroll_frame = ctk.CTkScrollableFrame(parent, width=500, height=150, label_text="Configuración por Señal")
+        self.freq_scroll_frame.pack(pady=5, padx=10)
+
+        self.freq_options_frame = ctk.CTkScrollableFrame(parent, height=140, label_text="Opciones de Frecuencia")
+        self.freq_options_frame.pack(pady=2, padx=10, fill="x")
+        self.freq_options_frame.grid_columnconfigure((0, 1), weight=1, uniform="col")
+
+        freq_title_row_frame = ctk.CTkFrame(self.freq_options_frame, fg_color="transparent")
+        freq_title_row_frame.grid(row=0, column=0, columnspan=2, pady=2)
+        ctk.CTkLabel(freq_title_row_frame, text="Título:").pack(side="left", padx=5)
+        self.freq_title_entry = ctk.CTkEntry(freq_title_row_frame, width=200, placeholder_text="Nombre del gráfico...")
+        self.freq_title_entry.insert(0, "Respuesta en Frecuencia")
+        self.freq_title_entry.pack(side="left", padx=5)
+
+        self.freq_show_peaks_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(self.freq_options_frame, text="Ver Max/Min", variable=self.freq_show_peaks_var).grid(row=1, column=0, padx=10, pady=2, sticky="e")
+
+        self.freq_show_cursors_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(self.freq_options_frame, text="Ver Cursores", variable=self.freq_show_cursors_var).grid(row=1, column=1, padx=10, pady=2, sticky="w")
+
+        self.freq_show_grid_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(self.freq_options_frame, text="Ver Grilla", variable=self.freq_show_grid_var).grid(row=2, column=0, padx=10, pady=2, sticky="e")
+
+        grid_width_frame = ctk.CTkFrame(self.freq_options_frame, fg_color="transparent")
+        grid_width_frame.grid(row=2, column=1, padx=10, pady=2, sticky="w")
+        ctk.CTkLabel(grid_width_frame, text="Grosor:").pack(side="left")
+        self.freq_grid_width_entry = ctk.CTkEntry(grid_width_frame, width=50)
+        self.freq_grid_width_entry.insert(0, "0.6")
+        self.freq_grid_width_entry.pack(side="left", padx=5)
+
+        self.freq_plot_btn = ctk.CTkButton(parent, text="Calcular FFT", command=self.plot_freq_data, state="disabled", fg_color="green")
+        self.freq_plot_btn.pack(pady=15)
+
+    def plot_freq_data(self):
+        try:
+            # 1. Obtener índices del mapeo
+            f_idx = int(self.freq_col_idx.get())
+            g_idx = int(self.gain_col_idx.get())
+            p_idx = int(self.phase_col_idx.get())
+
+            # 2. Obtener nombres de columnas reales para extraer los datos correctamente
+            df_headers = pd.read_csv(self.freq_file_path, skiprows=[1], nrows=0, encoding='latin1')
+            col_names = df_headers.columns
+            
+            f_name = col_names[f_idx]
+            g_name = col_names[g_idx]
+            p_name = col_names[p_idx]
+
+            # 3. Leer solo las 3 columnas necesarias
+            df = pd.read_csv(self.freq_file_path, skiprows=[1], encoding='latin1', usecols=[f_idx, g_idx, p_idx])
+            if df.empty: return
+
+            f_data = df[f_name]
+            g_data = df[g_name]
+            p_data = df[p_name]
+
+            # 4. Usar configuración fija: índice 0 para Ganancia, índice 1 para Fase
+            g_config = self.freq_signal_inputs[0]
+            p_config = self.freq_signal_inputs[1]
+
+            fig, ax1 = plt.subplots(figsize=(10, 6))
+            ax2 = ax1.twinx()
+
+            try:
+                fg_width = float(self.freq_grid_width_entry.get())
+            except ValueError:
+                fg_width = 0.6
+
+            g_color = g_config["color"].get()
+            p_color = p_config["color"].get()
+
+            # Ganancia en el eje izquierdo
+            line_g, = ax1.semilogx(f_data, g_data, color=g_color, linewidth=1.5, label=g_config["alias"].get())
+            ax1.set_ylabel(f'{g_config["alias"].get()} (dB)', color=g_color)
+            ax1.tick_params(axis='y', labelcolor=g_color)
+            ax1.grid(self.freq_show_grid_var.get(), which='both', linestyle='--', alpha=0.6, linewidth=fg_width)
+
+            # Fase en el eje derecho
+            line_p, = ax2.semilogx(f_data, p_data, color=p_color, linewidth=1.5, label=p_config["alias"].get())
+            ax2.set_ylabel(f'{p_config["alias"].get()} (grados)', color=p_color)
+            ax2.tick_params(axis='y', labelcolor=p_color)
+
+            ax1.set_xlabel('Frecuencia (Hz)')
+
+            # --- Tick synchronization ---
+            # Phase ticks: 15° increments covering the data range
+            step_p = 15
+            p_min, p_max = float(p_data.min()), float(p_data.max())
+            p_range = max(p_max - p_min, 1.0)
+            p_lo = p_min - p_range * 0.05
+            p_hi = p_max + p_range * 0.05
+
+            first_p = math.floor(p_lo / step_p) * step_p
+            phase_ticks = []
+            t = first_p
+            while t <= p_hi + 1e-9:
+                phase_ticks.append(round(t, 6))
+                t += step_p
+            n = len(phase_ticks)
+
+            # Gain ticks: same count n, step rounded to a nice number, first tick a round multiple
+            g_min, g_max = float(g_data.min()), float(g_data.max())
+            g_range = max(g_max - g_min, 1.0)
+            g_lo = g_min - g_range * 0.05
+            g_hi = g_max + g_range * 0.05
+
+            ideal_step = (g_hi - g_lo) / max(n - 1, 1)
+            nice_steps = [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 20, 25, 50, 100, 200]
+            gain_step = min(nice_steps, key=lambda s: abs(s - ideal_step))
+
+            first_g = math.floor(g_lo / gain_step) * gain_step
+            gain_ticks = [first_g + i * gain_step for i in range(n)]
+
+            # If gain ticks don't reach g_hi, extend both lists together to keep them in sync
+            while gain_ticks[-1] < g_hi - 1e-9:
+                gain_ticks.append(round(gain_ticks[-1] + gain_step, 10))
+                phase_ticks.append(round(phase_ticks[-1] + step_p, 6))
+
+            # ylim strictly from ticks so every grid line has a tick
+            ax1.set_ylim(gain_ticks[0] - gain_step * 0.5, gain_ticks[-1] + gain_step * 0.5)
+            ax1.set_yticks(gain_ticks)
+            ax1.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
+
+            ax2.set_ylim(phase_ticks[0] - step_p * 0.5, phase_ticks[-1] + step_p * 0.5)
+            ax2.set_yticks(phase_ticks)
+            ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
+
+            # Anotaciones de Máximos y Mínimos
+            if self.freq_show_peaks_var.get():
+                idx_max_g = g_data.idxmax()
+                ax1.annotate(f'Max: {g_data[idx_max_g]:.2g}', xy=(f_data[idx_max_g], g_data[idx_max_g]), xytext=(5, 5),
+                             textcoords='offset points', color=g_color, fontweight='bold')
+                idx_min_g = g_data.idxmin()
+                ax1.annotate(f'Min: {g_data[idx_min_g]:.2g}', xy=(f_data[idx_min_g], g_data[idx_min_g]), xytext=(5, -15),
+                             textcoords='offset points', color=g_color, fontweight='bold')
+
+                idx_max_p = p_data.idxmax()
+                ax2.annotate(f'Max: {p_data[idx_max_p]:.2g}', xy=(f_data[idx_max_p], p_data[idx_max_p]), xytext=(5, 5),
+                             textcoords='offset points', color=p_color, fontweight='bold')
+                idx_min_p = p_data.idxmin()
+                ax2.annotate(f'Min: {p_data[idx_min_p]:.2g}', xy=(f_data[idx_min_p], p_data[idx_min_p]), xytext=(5, -15),
+                             textcoords='offset points', color=p_color, fontweight='bold')
+
+            if self.freq_show_cursors_var.get():
+                mplcursors.cursor([line_g, line_p], hover=True)
+
+            lines = [line_g, line_p]
+            ax1.legend(lines, [l.get_label() for l in lines], loc='best')
+
+            fig.suptitle(self.freq_title_entry.get() or "Respuesta en Frecuencia")
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al graficar respuesta en frecuencia: {e}")
 
     # --- 5. New Method to Handle Dropped Files ---
     def handle_drop(self, event):
@@ -110,40 +371,69 @@ class CSVPlotterApp(CTkWindowWithDnD):
             self.load_csv(file_selected)
 
     def load_csv(self, path):
-        self.file_path = path
-        # Normalizar separadores de ruta para mostrar el nombre corto
+        current_tab = self.tabview.get()
         short_name = path.replace("\\", "/").split("/")[-1]
-        self.path_label.configure(text=f"Cargado: {short_name}", text_color="white")
-        self.plot_btn.configure(state="normal")
+        
+        if current_tab == "Respuesta en Tiempo":
+            self.time_file_path = path
+            self.time_path_label.configure(text=f"Cargado: {short_name}", text_color="white")
+            self.time_plot_btn.configure(state="normal")
+        else:
+            self.freq_file_path = path
+            self.freq_path_label.configure(text=f"Cargado: {short_name}", text_color="white")
+            self.freq_plot_btn.configure(state="normal")
+            
         self.setup_dynamic_inputs()
 
     def setup_dynamic_inputs(self):
-        # Limpiar entradas anteriores
-        for widget in self.scroll_frame.winfo_children():
+        current_tab = self.tabview.get()
+        if current_tab == "Respuesta en Tiempo":
+            scroll_frame = self.time_scroll_frame
+            file_path = self.time_file_path
+            self.time_signal_inputs = []
+            inputs_list = self.time_signal_inputs
+            start_idx = 1 # Saltar x-axis
+        else:
+            scroll_frame = self.freq_scroll_frame
+            file_path = self.freq_file_path
+            self.freq_signal_inputs = []
+            inputs_list = self.freq_signal_inputs
+            start_idx = 0 # No se usa para el loop de frecuencia
+
+        for widget in scroll_frame.winfo_children():
             widget.destroy()
-        self.signal_inputs = []
 
         try:
-            # Leemos solo la cabecera para saber las columnas
-            df_headers = pd.read_csv(self.file_path, skiprows=[1], nrows=0)
-            signals = df_headers.columns[1:] # Ignoramos el x-axis
-            
+            # Definir qué señales mostrar según la pestaña
+            if current_tab == "Respuesta en Tiempo":
+                df_headers = pd.read_csv(file_path, skiprows=[1], nrows=0)
+                signals = df_headers.columns[start_idx:]
+            else:
+                # Respuesta en Frecuencia siempre tiene estos dos parámetros configurables
+                signals = ["Ganancia", "Fase"]
+
             for i, col in enumerate(signals):
-                frame = ctk.CTkFrame(self.scroll_frame)
+                frame = ctk.CTkFrame(scroll_frame)
                 frame.pack(pady=5, fill="x", padx=5)
                 
-                ctk.CTkLabel(frame, text=f"Señal: {col}", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=2)
+                frame.grid_columnconfigure((0, 1), weight=1, uniform="col")
                 
-                ctk.CTkLabel(frame, text="Nombre:").grid(row=1, column=0, padx=5)
-                n_entry = ctk.CTkEntry(frame, width=120); n_entry.insert(0, col); n_entry.grid(row=1, column=1, pady=2)
+                title_text = col if current_tab == "Respuesta en Frecuencia" else f"Señal: {col}"
+                ctk.CTkLabel(frame, text=title_text, font=("Arial", 11, "bold")).grid(row=0, column=0, columnspan=2, pady=2)
                 
-                ctk.CTkLabel(frame, text="Escala:").grid(row=2, column=0, padx=5)
-                s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=2, column=1, pady=2)
+                ctk.CTkLabel(frame, text="Nombre:").grid(row=1, column=0, padx=5, sticky="e")
+                n_entry = ctk.CTkEntry(frame, width=120); n_entry.insert(0, col); n_entry.grid(row=1, column=1, pady=2, sticky="w")
                 
-                ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=3, column=0, padx=5)
-                d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=3, column=1, pady=2)
+                # Escala y Desplazamiento solo para Tiempo
+                s_entry = d_entry = None
+                if current_tab == "Respuesta en Tiempo":
+                    ctk.CTkLabel(frame, text="Escala:").grid(row=2, column=0, padx=5, sticky="e")
+                    s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=2, column=1, pady=2, sticky="w")
+                    
+                    ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=3, column=0, padx=5, sticky="e")
+                    d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=3, column=1, pady=2, sticky="w")
                 
-                ctk.CTkLabel(frame, text="Color:").grid(row=4, column=0, padx=5)
+                ctk.CTkLabel(frame, text="Color:").grid(row=4, column=0, padx=5, sticky="e")
                 
                 # Función para actualizar el color visual del menú
                 def set_color(choice, menu=None):
@@ -157,116 +447,189 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 initial_color = default_colors[i % len(default_colors)]
                 color_menu.set(initial_color)
                 set_color(initial_color, color_menu) # Aplicar color inicial
-                color_menu.grid(row=4, column=1, pady=2)
+                color_menu.grid(row=4, column=1, pady=2, sticky="w")
                 
-                # Checkboxes para Max/Min
-                max_var = ctk.BooleanVar(value=False)
-                min_var = ctk.BooleanVar(value=False)
-                ctk.CTkCheckBox(frame, text="Máximo", variable=max_var, font=("Arial", 10)).grid(row=5, column=0, padx=5, pady=2)
-                ctk.CTkCheckBox(frame, text="Mínimo", variable=min_var, font=("Arial", 10)).grid(row=5, column=1, padx=5, pady=2)
-                
-                self.signal_inputs.append({
+                inputs_list.append({
                     "name": col, "alias": n_entry, "scale": s_entry, 
-                    "disp": d_entry, "color": color_menu,
-                    "maxima_var": max_var, "minima_var": min_var
+                    "disp": d_entry, "color": color_menu
                 })
         except Exception as e:
             messagebox.showerror("Error", f"Error al leer columnas: {e}")
 
     def plot_data(self):
         try:
-            # 1. Read the CSV using Pandas
-            df = pd.read_csv(self.file_path, skiprows=[1])  # Skip the second row if it contains units
-            
-            # Quick check to ensure the CSV actually has data
+            df = pd.read_csv(self.time_file_path, skiprows=[1])
             if df.empty:
                 messagebox.showerror("Error", "The selected CSV file is empty.")
                 return
-            
-            # 2. Determine columns to plot
-            # For simplicity, we use the 1st column as X and the 2nd column as Y
             if len(df.columns) < 2:
                 messagebox.showerror("Error", "The CSV must have at least 2 columns (X and Y).")
                 return
-                
-            df['x-axis'] *= 1e6
-            df.iloc[:, 1:] = df.iloc[:, 1:] * 1e3
-            
-            # Aplicar parámetros individuales
-            colors = []
-            legend_labels = []
-            # Primero, aplicar escala y desplazamiento a todas las señales
-            for i, input_set in enumerate(self.signal_inputs):
-                col_name = input_set["name"]
-                try:
-                    scale = float(input_set["scale"].get())
-                    disp = float(input_set["disp"].get())
-                    df[col_name] = df[col_name] * scale + disp
-                    colors.append(input_set["color"].get())
-                    legend_labels.append(input_set["alias"].get())
-                except ValueError:
-                    messagebox.showerror("Error", f"Valores inválidos en la señal {col_name}")
-                    return
 
-            # 3. Create the Matplotlib plot
-            ax = df.plot(x='x-axis', y=df.columns[1:], kind='line', figsize=(10, 6), color=colors) 
-            
-            # Señalar máximos y mínimos si están seleccionados
-            for input_set in self.signal_inputs:
-                col_name = input_set["name"]
-                alias = input_set["alias"].get()
-                color = input_set["color"].get()
-                
-                if input_set["maxima_var"].get():
-                    max_idx = df[col_name].idxmax()
-                    max_x = df.loc[max_idx, 'x-axis']
-                    max_y = df.loc[max_idx, col_name]
-                    ax.annotate(f'{alias} Max: {max_y:.2g}', xy=(max_x, max_y), 
-                                xytext=(5, 5), textcoords='offset points',
-                                color=color, fontsize=9, fontweight='bold')
-                
-                if input_set["minima_var"].get():
-                    min_idx = df[col_name].idxmin()
-                    min_x = df.loc[min_idx, 'x-axis']
-                    min_y = df.loc[min_idx, col_name]
-                    ax.annotate(f'{alias} Min: {min_y:.2g}', xy=(min_x, min_y), 
-                                xytext=(5, -15), textcoords='offset points',
-                                color=color, fontsize=9, fontweight='bold')
+            u_x = self.unit_x_menu.get()
+            u_y = self.unit_y_menu.get()
+            x_data = df['x-axis'] * self.unit_multipliers[u_x]
 
-            # Aplicar escalas logarítmicas si están seleccionadas
-            if self.log_x_var.get():
-                ax.set_xscale('symlog')
-            if self.log_y_var.get():
-                ax.set_yscale('symlog')
+            # base_div is the mV/div at scale=1; actual div per signal = base_div / scale
+            try:
+                base_div = float(self.grid_spacing_y_entry.get()) if self.grid_spacing_y_entry.get().strip() else None
+            except ValueError:
+                base_div = None
 
-            # Customize the graph labels
-            plt.xlabel('Tiempo (µs)')
-            plt.ylabel('Voltaje (mV)')
-            plt.title('Osciloscopio - Señales')
-            
-            # Aplicar configuración de grilla
             try:
                 g_width = float(self.grid_width_entry.get())
             except ValueError:
                 g_width = 0.6
-            ax.grid(self.show_grid_var.get(), linestyle='--', alpha=0.6, linewidth=g_width)
 
-            # Aplicar espaciado manual de la grilla (tamaño de cuadros)
             try:
-                x_sp = self.grid_spacing_x_entry.get()
-                if x_sp: ax.xaxis.set_major_locator(ticker.MultipleLocator(float(x_sp)))
-                y_sp = self.grid_spacing_y_entry.get()
-                if y_sp: ax.yaxis.set_major_locator(ticker.MultipleLocator(float(y_sp)))
+                x_spacing = float(self.grid_spacing_x_entry.get()) if self.grid_spacing_x_entry.get().strip() else None
             except ValueError:
-                pass
+                x_spacing = None
 
-            mplcursors.cursor(ax, hover=True)
+            nice_steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
-            plt.legend(legend_labels)
-            
-            # 4. Display the graph window
+            def resolve_div(scale, y_min, y_max):
+                if base_div is not None and scale > 0:
+                    return base_div / scale
+                y_range = max(y_max - y_min, 1e-9)
+                return min(nice_steps, key=lambda s: abs(s - y_range / 6))
+
+            def n_bounds(y_min, y_max, div):
+                # Number of ticks below and above zero needed to cover the data range
+                return (math.ceil(max(-y_min, 0) / div) + 1,
+                        math.ceil(max(y_max, 0) / div) + 1)
+
+            def build_ticks(div, n_below, n_above):
+                # Ticks centered on zero: 0 is always at index n_below
+                return [round((-n_below + i) * div, 10) for i in range(n_below + n_above + 1)]
+
+            def parse_sig(sig):
+                try:
+                    scale = float(sig["scale"].get())
+                except (ValueError, AttributeError):
+                    scale = 1.0
+                try:
+                    disp = float(sig["disp"].get())
+                except (ValueError, AttributeError):
+                    disp = 0.0
+                y = df[sig["name"]] * self.unit_multipliers[u_y] + disp
+                return scale, y
+
+            def annotate_peaks(ax, y_data, sig):
+                color, alias = sig["color"].get(), sig["alias"].get()
+                max_idx = y_data.idxmax()
+                ax.annotate(f'{alias} Max: {y_data[max_idx]:.2g}',
+                            xy=(x_data[max_idx], y_data[max_idx]),
+                            xytext=(5, 5), textcoords='offset points',
+                            color=color, fontsize=9, fontweight='bold')
+                min_idx = y_data.idxmin()
+                ax.annotate(f'{alias} Min: {y_data[min_idx]:.2g}',
+                            xy=(x_data[min_idx], y_data[min_idx]),
+                            xytext=(5, -15), textcoords='offset points',
+                            color=color, fontsize=9, fontweight='bold')
+
+            signals = self.time_signal_inputs
+
+            for pair_start in range(0, len(signals), 2):
+                pair = signals[pair_start:pair_start + 2]
+                fig, ax1 = plt.subplots(figsize=(10, 6))
+                fig.suptitle(self.title_entry.get() or "Osciloscopio - Señales")
+                ax2 = None
+
+                sig1 = pair[0]
+                scale1, y1 = parse_sig(sig1)
+
+                if len(pair) == 2:
+                    sig2 = pair[1]
+                    scale2, y2 = parse_sig(sig2)
+                    same_scale = abs(scale1 - scale2) < 1e-9
+                else:
+                    sig2, scale2, y2 = None, None, None
+                    same_scale = True
+
+                if same_scale:
+                    # Single Y axis — covers both signals' range
+                    all_min = float(y1.min()) if y2 is None else float(min(y1.min(), y2.min()))
+                    all_max = float(y1.max()) if y2 is None else float(max(y1.max(), y2.max()))
+                    div = resolve_div(scale1, all_min, all_max)
+                    nb, na = n_bounds(all_min, all_max, div)
+                    ticks = build_ticks(div, nb, na)
+
+                    line1, = ax1.plot(x_data, y1, color=sig1["color"].get(), label=sig1["alias"].get())
+                    lines = [line1]
+                    if sig2 is not None:
+                        line2, = ax1.plot(x_data, y2, color=sig2["color"].get(), label=sig2["alias"].get())
+                        lines.append(line2)
+
+                    ax1.set_ylabel(f'Voltaje ({u_y})')
+                    ax1.set_xlabel(f'Tiempo ({u_x})')
+                    ax1.set_yticks(ticks)
+                    ax1.set_ylim(ticks[0] - div * 0.5, ticks[-1] + div * 0.5)
+                    ax1.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
+                    ax1.grid(self.show_grid_var.get(), linestyle='--', alpha=0.6, linewidth=g_width)
+
+                    if self.show_peaks_var.get():
+                        annotate_peaks(ax1, y1, sig1)
+                        if sig2 is not None:
+                            annotate_peaks(ax1, y2, sig2)
+
+                else:
+                    # Dual Y axes — ticks built symmetrically around zero so both zero lines coincide
+                    div1 = resolve_div(scale1, float(y1.min()), float(y1.max()))
+                    div2 = resolve_div(scale2, float(y2.min()), float(y2.max()))
+
+                    nb1, na1 = n_bounds(float(y1.min()), float(y1.max()), div1)
+                    nb2, na2 = n_bounds(float(y2.min()), float(y2.max()), div2)
+                    # Use the same n_below/n_above for both axes so zero is at the same grid line
+                    n_below = max(nb1, nb2)
+                    n_above = max(na1, na2)
+
+                    ticks1 = build_ticks(div1, n_below, n_above)
+                    ticks2 = build_ticks(div2, n_below, n_above)
+
+                    line1, = ax1.plot(x_data, y1, color=sig1["color"].get(), label=sig1["alias"].get())
+                    ax1.set_ylabel(f'{sig1["alias"].get()} ({u_y})', color=sig1["color"].get())
+                    ax1.tick_params(axis='y', labelcolor=sig1["color"].get())
+                    ax1.set_xlabel(f'Tiempo ({u_x})')
+                    lines = [line1]
+
+                    ax2 = ax1.twinx()
+                    line2, = ax2.plot(x_data, y2, color=sig2["color"].get(), label=sig2["alias"].get())
+                    ax2.set_ylabel(f'{sig2["alias"].get()} ({u_y})', color=sig2["color"].get())
+                    ax2.tick_params(axis='y', labelcolor=sig2["color"].get())
+                    lines.append(line2)
+
+                    ax1.set_yticks(ticks1)
+                    ax1.set_ylim(ticks1[0] - div1 * 0.5, ticks1[-1] + div1 * 0.5)
+                    ax1.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
+                    ax1.grid(self.show_grid_var.get(), linestyle='--', alpha=0.6, linewidth=g_width)
+
+                    ax2.set_yticks(ticks2)
+                    ax2.set_ylim(ticks2[0] - div2 * 0.5, ticks2[-1] + div2 * 0.5)
+                    ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%g'))
+
+                    if self.show_peaks_var.get():
+                        annotate_peaks(ax1, y1, sig1)
+                        annotate_peaks(ax2, y2, sig2)
+
+                if x_spacing:
+                    ax1.xaxis.set_major_locator(ticker.MultipleLocator(x_spacing))
+
+                if self.log_x_var.get():
+                    ax1.set_xscale('symlog')
+                if self.log_y_var.get():
+                    ax1.set_yscale('symlog')
+                    if ax2:
+                        ax2.set_yscale('symlog')
+
+                if self.show_cursors_var.get():
+                    mplcursors.cursor(lines, hover=True)
+
+                ax1.legend(lines, [l.get_label() for l in lines], loc='best')
+                plt.tight_layout()
+
             plt.show()
-            
+
         except Exception as e:
             messagebox.showerror("Error", f"Could not parse or plot data.\nDetails: {e}")
 
