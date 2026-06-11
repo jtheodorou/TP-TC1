@@ -15,6 +15,7 @@ Funciones de transferencia (denominador común: LC·s² + RC·s + 1):
   Circ.5:  H(s) = (LC·s²+1)  / (LC·s² + RC·s + 1)
 """
 
+import os
 import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
@@ -25,8 +26,8 @@ from matplotlib.lines import Line2D
 #  PARÁMETROS 
 # ══════════════════════════════════════════════════════════════════════════════
 R = 50       # Ω
-L = 1e-3     # H   (1 mH)
-C = 1e-9     # F   (1 µF) 
+L = 1e-3     # H   
+C = 10e-9     # F  
 # ══════════════════════════════════════════════════════════════════════════════
 
 KS = 1e3   # escala visual: todo en krad/s
@@ -35,7 +36,7 @@ omega0 = 1.0 / np.sqrt(L * C)
 Q      = np.sqrt(L / C) / R
 
 print("─" * 58)
-print(f"  R = {R} Ω   L = {L*1e3:.4g} mH   C = {C*1e6:.4g} µF")
+print(f"  R = {R} Ω   L = {L*1e3:.4g} mH   C = {C*1e9:.4g} nF")
 print(f"  ω₀ = {omega0/KS:.4f} krad/s  ({omega0/(2*np.pi):.2f} Hz)")
 print(f"  Q  = {Q:.4f}  → {'subamortiguado (polos complejos)' if Q > 0.5 else 'sobreamortiguado (polos reales)'}")
 print("─" * 58)
@@ -188,7 +189,7 @@ pole_str = (f"$s = {upper_p.real:.2f} \\pm j\\,{abs(upper_p.imag):.2f}$ krad/s"
 
 fig.suptitle(
     f"Diagrama de Polos y Ceros  –  Circuitos RLC Serie\n"
-    f"R = {R} Ω,   L = {L*1e3:.0f} mH,   C = {C*1e6:.1f} µF   "
+    f"R = {R} Ω,   L = {L*1e3:.0f} mH,   C = {C*1e9:.1f} nF   "
     f"($\\omega_0 = {omega0/KS:.3f}$ krad/s,   $Q = {Q:.3f}$)\n"
     f"Polos comunes: {pole_str}",
     fontsize=11.5, fontweight='bold', y=1.07
@@ -196,6 +197,7 @@ fig.suptitle(
 
 plt.tight_layout(pad=2.0)
 
-fname = "polos_ceros_RLC.png"
+output_dir = os.path.dirname(os.path.abspath(__file__))
+fname = os.path.join(output_dir, "polos_ceros_RLC.png")
 plt.savefig(fname, dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
 print(f"\n✓  Figura guardada: {fname}")
