@@ -29,8 +29,10 @@ class CSVPlotterApp(CTkWindowWithDnD):
         
         self.time_file_path = ""
         self.freq_file_path = ""
+        self.lissajous_file_path = ""
         self.time_signal_inputs = []
         self.freq_signal_inputs = []
+        self.lissajous_columns = []
         self.unit_multipliers = {
             "s": 1, "ms": 1e3, "µs": 1e6, "ns": 1e9, "ps": 1e12,
             "V": 1, "mV": 1e3, "µV": 1e6, "nV": 1e9
@@ -47,17 +49,23 @@ class CSVPlotterApp(CTkWindowWithDnD):
                                       command=lambda: self.select_mode("Tiempo"), width=200, height=50)
         self.btn_time.pack(pady=10)
         
-        self.btn_freq = ctk.CTkButton(self.selection_frame, text="Respuesta en Frecuencia", 
+        self.btn_freq = ctk.CTkButton(self.selection_frame, text="Respuesta en Frecuencia",
                                       command=lambda: self.select_mode("Frecuencia"), width=200, height=50)
         self.btn_freq.pack(pady=10)
+
+        self.btn_lissajous = ctk.CTkButton(self.selection_frame, text="Figuras de Lissajous",
+                                           command=lambda: self.select_mode("Lissajous"), width=200, height=50)
+        self.btn_lissajous.pack(pady=10)
 
         # --- Contenedor de Pestañas (Oculto al inicio) ---
         self.tabview = ctk.CTkTabview(self)
         self.tab_time = self.tabview.add("Respuesta en Tiempo")
         self.tab_freq = self.tabview.add("Respuesta en Frecuencia")
-        
+        self.tab_lissajous = self.tabview.add("Figuras de Lissajous")
+
         self.setup_time_response_ui(self.tab_time)
         self.setup_freq_response_ui(self.tab_freq)
+        self.setup_lissajous_ui(self.tab_lissajous)
 
         # --- 4. Drag and Drop Setup ---
         self.drop_target_register(DND_FILES)
@@ -77,6 +85,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
             self.plot_data()
         elif current_tab == "Respuesta en Frecuencia" and self.freq_plot_btn.cget("state") == "normal":
             self.plot_freq_data()
+        elif current_tab == "Figuras de Lissajous" and self.lissajous_plot_btn.cget("state") == "normal":
+            self.plot_lissajous()
 
     def select_mode(self, mode):
         """Cambia de la pantalla de selección a las pestañas"""
@@ -84,8 +94,10 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
         if mode == "Tiempo":
             self.tabview.set("Respuesta en Tiempo")
-        else:
+        elif mode == "Frecuencia":
             self.tabview.set("Respuesta en Frecuencia")
+        else:
+            self.tabview.set("Figuras de Lissajous")
 
     def setup_time_response_ui(self, parent):
         """Configura la interfaz original de respuesta en tiempo dentro de un parent"""
@@ -153,7 +165,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.grid_spacing_x_entry.pack(side="left", padx=2)
 
         ctk.CTkLabel(scale_frame, text="   Eje Y:").pack(side="left", padx=2)
-        self.unit_y_menu = ctk.CTkOptionMenu(scale_frame, values=["V", "mV", "µV", "nV"], width=75)
+        self.unit_y_menu = ctk.CTkOptionMenu(scale_frame, values=["V", "mV", "µV"], width=75)
         self.unit_y_menu.set("mV")
         self.unit_y_menu.pack(side="left", padx=2)
         ctk.CTkLabel(scale_frame, text="Div:").pack(side="left", padx=2)
@@ -378,11 +390,17 @@ class CSVPlotterApp(CTkWindowWithDnD):
             self.time_file_path = path
             self.time_path_label.configure(text=f"Cargado: {short_name}", text_color="white")
             self.time_plot_btn.configure(state="normal")
+        elif current_tab == "Figuras de Lissajous":
+            self.lissajous_file_path = path
+            self.lissajous_path_label.configure(text=f"Cargado: {short_name}", text_color="white")
+            self.lissajous_plot_btn.configure(state="normal")
+            self._populate_lissajous_columns(path)
+            return
         else:
             self.freq_file_path = path
             self.freq_path_label.configure(text=f"Cargado: {short_name}", text_color="white")
             self.freq_plot_btn.configure(state="normal")
-            
+
         self.setup_dynamic_inputs()
 
     def setup_dynamic_inputs(self):
@@ -412,29 +430,39 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 # Respuesta en Frecuencia siempre tiene estos dos parámetros configurables
                 signals = ["Ganancia", "Fase"]
 
+            if current_tab == "Respuesta en Tiempo":
+                ctk.CTkLabel(scroll_frame, text="Índices de columna con base 0  (col. 0 = tiempo)",
+                             font=("Arial", 10, "italic"), text_color="gray").pack(pady=(4, 0))
+
             for i, col in enumerate(signals):
                 frame = ctk.CTkFrame(scroll_frame)
                 frame.pack(pady=5, fill="x", padx=5)
-                
+
                 frame.grid_columnconfigure((0, 1), weight=1, uniform="col")
-                
+
                 title_text = col if current_tab == "Respuesta en Frecuencia" else f"Señal: {col}"
                 ctk.CTkLabel(frame, text=title_text, font=("Arial", 11, "bold")).grid(row=0, column=0, columnspan=2, pady=2)
-                
+
                 ctk.CTkLabel(frame, text="Nombre:").grid(row=1, column=0, padx=5, sticky="e")
                 n_entry = ctk.CTkEntry(frame, width=120); n_entry.insert(0, col); n_entry.grid(row=1, column=1, pady=2, sticky="w")
-                
-                # Escala y Desplazamiento solo para Tiempo
-                s_entry = d_entry = None
+
+                # Columna, Escala y Desplazamiento solo para Tiempo
+                s_entry = d_entry = col_idx_entry = None
                 if current_tab == "Respuesta en Tiempo":
-                    ctk.CTkLabel(frame, text="Escala:").grid(row=2, column=0, padx=5, sticky="e")
-                    s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=2, column=1, pady=2, sticky="w")
-                    
-                    ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=3, column=0, padx=5, sticky="e")
-                    d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=3, column=1, pady=2, sticky="w")
-                
-                ctk.CTkLabel(frame, text="Color:").grid(row=4, column=0, padx=5, sticky="e")
-                
+                    ctk.CTkLabel(frame, text="Columna (idx):").grid(row=2, column=0, padx=5, sticky="e")
+                    col_idx_entry = ctk.CTkEntry(frame, width=80)
+                    col_idx_entry.insert(0, str(start_idx + i))
+                    col_idx_entry.grid(row=2, column=1, pady=2, sticky="w")
+
+                    ctk.CTkLabel(frame, text="Escala:").grid(row=3, column=0, padx=5, sticky="e")
+                    s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=3, column=1, pady=2, sticky="w")
+
+                    ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=4, column=0, padx=5, sticky="e")
+                    d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=4, column=1, pady=2, sticky="w")
+
+                color_row = 5 if current_tab == "Respuesta en Tiempo" else 4
+                ctk.CTkLabel(frame, text="Color:").grid(row=color_row, column=0, padx=5, sticky="e")
+
                 # Función para actualizar el color visual del menú
                 def set_color(choice, menu=None):
                     if menu:
@@ -442,16 +470,16 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
                 color_menu = ctk.CTkOptionMenu(frame, values=["blue", "red", "green", "orange", "purple", "black", "cyan", "magenta"], width=100)
                 color_menu.configure(command=lambda c, m=color_menu: set_color(c, m))
-                
+
                 default_colors = ["blue", "red", "green", "orange", "purple", "black", "cyan", "magenta"]
                 initial_color = default_colors[i % len(default_colors)]
                 color_menu.set(initial_color)
-                set_color(initial_color, color_menu) # Aplicar color inicial
-                color_menu.grid(row=4, column=1, pady=2, sticky="w")
-                
+                set_color(initial_color, color_menu)
+                color_menu.grid(row=color_row, column=1, pady=2, sticky="w")
+
                 inputs_list.append({
-                    "name": col, "alias": n_entry, "scale": s_entry, 
-                    "disp": d_entry, "color": color_menu
+                    "name": col, "alias": n_entry, "scale": s_entry,
+                    "disp": d_entry, "color": color_menu, "col_idx": col_idx_entry
                 })
         except Exception as e:
             messagebox.showerror("Error", f"Error al leer columnas: {e}")
@@ -468,7 +496,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
             u_x = self.unit_x_menu.get()
             u_y = self.unit_y_menu.get()
-            x_data = df['x-axis'] * self.unit_multipliers[u_x]
+            x_data = df.iloc[:, 0] * self.unit_multipliers[u_x]
 
             # base_div is the mV/div at scale=1; actual div per signal = base_div / scale
             try:
@@ -512,7 +540,14 @@ class CSVPlotterApp(CTkWindowWithDnD):
                     disp = float(sig["disp"].get())
                 except (ValueError, AttributeError):
                     disp = 0.0
-                y = df[sig["name"]] * self.unit_multipliers[u_y] + disp
+                try:
+                    col_idx = int(sig["col_idx"].get())
+                except (ValueError, AttributeError):
+                    col_idx = None
+                if col_idx is not None:
+                    y = df.iloc[:, col_idx] * self.unit_multipliers[u_y] + disp
+                else:
+                    y = df[sig["name"]] * self.unit_multipliers[u_y] + disp
                 return scale, y
 
             def annotate_peaks(ax, y_data, sig):
@@ -632,6 +667,163 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
         except Exception as e:
             messagebox.showerror("Error", f"Could not parse or plot data.\nDetails: {e}")
+
+    def setup_lissajous_ui(self, parent):
+        """Configura la interfaz para figuras de Lissajous."""
+        ctk.CTkLabel(parent, text="Selecciona o arrastra un archivo CSV aquí",
+                     font=("Arial", 16, "bold")).pack(pady=10)
+
+        ctk.CTkButton(parent, text="Buscar CSV", command=self.browse_file).pack(pady=5)
+
+        self.lissajous_path_label = ctk.CTkLabel(parent, text="No fue seleccionado ningún archivo",
+                                                  font=("Arial", 10, "italic"), text_color="gray")
+        self.lissajous_path_label.pack(pady=5)
+
+        # Selección de columnas
+        col_frame = ctk.CTkFrame(parent)
+        col_frame.pack(pady=5, fill="x", padx=10)
+        col_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        ctk.CTkLabel(col_frame, text="Selección de Señales:", font=("Arial", 12, "bold")).grid(
+            row=0, column=0, columnspan=4, pady=5)
+
+        ctk.CTkLabel(col_frame, text="Eje X (CH):").grid(row=1, column=0, padx=5, sticky="e")
+        self.lissajous_x_menu = ctk.CTkOptionMenu(col_frame, values=["—"], width=130)
+        self.lissajous_x_menu.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+        ctk.CTkLabel(col_frame, text="Eje Y (CH):").grid(row=1, column=2, padx=5, sticky="e")
+        self.lissajous_y_menu = ctk.CTkOptionMenu(col_frame, values=["—"], width=130)
+        self.lissajous_y_menu.grid(row=1, column=3, padx=5, pady=5, sticky="w")
+
+        # Opciones
+        opts_frame = ctk.CTkScrollableFrame(parent, height=130, label_text="Opciones del Gráfico")
+        opts_frame.pack(pady=5, padx=10, fill="x")
+        opts_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="col")
+
+        title_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        title_row.grid(row=0, column=0, columnspan=4, pady=2)
+        ctk.CTkLabel(title_row, text="Título:").pack(side="left", padx=5)
+        self.lissajous_title_entry = ctk.CTkEntry(title_row, width=200, placeholder_text="Nombre del gráfico...")
+        self.lissajous_title_entry.insert(0, "Figura de Lissajous")
+        self.lissajous_title_entry.pack(side="left", padx=5)
+
+        self.lissajous_show_grid_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(opts_frame, text="Ver Grilla", variable=self.lissajous_show_grid_var).grid(
+            row=1, column=0, padx=5, pady=4)
+
+        self.lissajous_show_cursors_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(opts_frame, text="Ver Cursores", variable=self.lissajous_show_cursors_var).grid(
+            row=1, column=1, padx=5, pady=4)
+
+        self.lissajous_equal_aspect_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(opts_frame, text="Aspecto 1:1", variable=self.lissajous_equal_aspect_var).grid(
+            row=1, column=2, padx=5, pady=4)
+
+        color_frame = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        color_frame.grid(row=1, column=3, padx=5, pady=4)
+        ctk.CTkLabel(color_frame, text="Color:").pack(side="left")
+
+        def set_lissajous_color(choice):
+            self.lissajous_color_menu.configure(fg_color=choice, button_color=choice, button_hover_color=choice)
+
+        self.lissajous_color_menu = ctk.CTkOptionMenu(
+            color_frame,
+            values=["blue", "red", "green", "orange", "purple", "black", "cyan", "magenta"],
+            width=100, command=set_lissajous_color)
+        self.lissajous_color_menu.set("blue")
+        set_lissajous_color("blue")
+        self.lissajous_color_menu.pack(side="left", padx=5)
+
+        # Unidades de los ejes
+        units_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
+        units_row.grid(row=2, column=0, columnspan=4, pady=4)
+        ctk.CTkLabel(units_row, text="Unidad X:").pack(side="left", padx=3)
+        self.lissajous_unit_x = ctk.CTkOptionMenu(units_row, values=["V", "mV", "µV", "nV"], width=75)
+        self.lissajous_unit_x.set("mV")
+        self.lissajous_unit_x.pack(side="left", padx=3)
+        ctk.CTkLabel(units_row, text="Unidad Y:").pack(side="left", padx=3)
+        self.lissajous_unit_y = ctk.CTkOptionMenu(units_row, values=["V", "mV", "µV", "nV"], width=75)
+        self.lissajous_unit_y.set("mV")
+        self.lissajous_unit_y.pack(side="left", padx=3)
+
+        self.lissajous_plot_btn = ctk.CTkButton(parent, text="Generar Lissajous",
+                                                 command=self.plot_lissajous, state="disabled", fg_color="green")
+        self.lissajous_plot_btn.pack(pady=15)
+
+    def _populate_lissajous_columns(self, path):
+        """Carga los nombres de columna del CSV y los pone en los menús X/Y."""
+        try:
+            df_headers = pd.read_csv(path, skiprows=[1], nrows=0, encoding='latin1')
+            self.lissajous_columns = list(df_headers.columns)
+        except Exception:
+            try:
+                df_headers = pd.read_csv(path, nrows=0, encoding='latin1')
+                self.lissajous_columns = list(df_headers.columns)
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudieron leer columnas: {e}")
+                return
+
+        if not self.lissajous_columns:
+            return
+
+        self.lissajous_x_menu.configure(values=self.lissajous_columns)
+        self.lissajous_y_menu.configure(values=self.lissajous_columns)
+
+        # Defaults: segunda y tercera columna (primera suele ser tiempo)
+        default_x = self.lissajous_columns[1] if len(self.lissajous_columns) > 1 else self.lissajous_columns[0]
+        default_y = self.lissajous_columns[2] if len(self.lissajous_columns) > 2 else self.lissajous_columns[-1]
+        self.lissajous_x_menu.set(default_x)
+        self.lissajous_y_menu.set(default_y)
+
+    def plot_lissajous(self):
+        """Genera la figura de Lissajous graficando la señal Y vs señal X."""
+        try:
+            x_col = self.lissajous_x_menu.get()
+            y_col = self.lissajous_y_menu.get()
+
+            try:
+                df = pd.read_csv(self.lissajous_file_path, skiprows=[1], encoding='latin1')
+            except Exception:
+                df = pd.read_csv(self.lissajous_file_path, encoding='latin1')
+
+            if df.empty:
+                messagebox.showerror("Error", "El archivo CSV está vacío.")
+                return
+            if x_col not in df.columns or y_col not in df.columns:
+                messagebox.showerror("Error", f"Columnas '{x_col}' o '{y_col}' no encontradas.")
+                return
+
+            mx = self.unit_multipliers[self.lissajous_unit_x.get()]
+            my = self.unit_multipliers[self.lissajous_unit_y.get()]
+            x_data = df[x_col] * mx
+            y_data = df[y_col] * my
+
+            color = self.lissajous_color_menu.get()
+            title = self.lissajous_title_entry.get() or "Figura de Lissajous"
+            u_x = self.lissajous_unit_x.get()
+            u_y = self.lissajous_unit_y.get()
+
+            fig, ax = plt.subplots(figsize=(7, 7))
+            line, = ax.plot(x_data, y_data, color=color, linewidth=1.2)
+
+            ax.set_xlabel(f"{x_col} ({u_x})")
+            ax.set_ylabel(f"{y_col} ({u_y})")
+            ax.set_title(title)
+
+            if self.lissajous_show_grid_var.get():
+                ax.grid(True, linestyle='--', alpha=0.6)
+
+            if self.lissajous_equal_aspect_var.get():
+                ax.set_aspect('equal', adjustable='box')
+
+            if self.lissajous_show_cursors_var.get():
+                mplcursors.cursor(line, hover=True)
+
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al generar figura de Lissajous:\n{e}")
+
 
 if __name__ == "__main__":
     app = CSVPlotterApp()
