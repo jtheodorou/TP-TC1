@@ -443,24 +443,30 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 title_text = col if current_tab == "Respuesta en Frecuencia" else f"Señal: {col}"
                 ctk.CTkLabel(frame, text=title_text, font=("Arial", 11, "bold")).grid(row=0, column=0, columnspan=2, pady=2)
 
-                ctk.CTkLabel(frame, text="Nombre:").grid(row=1, column=0, padx=5, sticky="e")
-                n_entry = ctk.CTkEntry(frame, width=120); n_entry.insert(0, col); n_entry.grid(row=1, column=1, pady=2, sticky="w")
+                # Checkbox "Incluir" solo para Tiempo
+                enabled_var = ctk.BooleanVar(value=True)
+                if current_tab == "Respuesta en Tiempo":
+                    ctk.CTkCheckBox(frame, text="Incluir", variable=enabled_var).grid(row=1, column=0, columnspan=2, pady=2)
+
+                name_row = 2 if current_tab == "Respuesta en Tiempo" else 1
+                ctk.CTkLabel(frame, text="Nombre:").grid(row=name_row, column=0, padx=5, sticky="e")
+                n_entry = ctk.CTkEntry(frame, width=120); n_entry.insert(0, col); n_entry.grid(row=name_row, column=1, pady=2, sticky="w")
 
                 # Columna, Escala y Desplazamiento solo para Tiempo
                 s_entry = d_entry = col_idx_entry = None
                 if current_tab == "Respuesta en Tiempo":
-                    ctk.CTkLabel(frame, text="Columna (idx):").grid(row=2, column=0, padx=5, sticky="e")
+                    ctk.CTkLabel(frame, text="Columna (idx):").grid(row=3, column=0, padx=5, sticky="e")
                     col_idx_entry = ctk.CTkEntry(frame, width=80)
                     col_idx_entry.insert(0, str(start_idx + i))
-                    col_idx_entry.grid(row=2, column=1, pady=2, sticky="w")
+                    col_idx_entry.grid(row=3, column=1, pady=2, sticky="w")
 
-                    ctk.CTkLabel(frame, text="Escala:").grid(row=3, column=0, padx=5, sticky="e")
-                    s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=3, column=1, pady=2, sticky="w")
+                    ctk.CTkLabel(frame, text="Escala:").grid(row=4, column=0, padx=5, sticky="e")
+                    s_entry = ctk.CTkEntry(frame, width=80); s_entry.insert(0, "1"); s_entry.grid(row=4, column=1, pady=2, sticky="w")
 
-                    ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=4, column=0, padx=5, sticky="e")
-                    d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=4, column=1, pady=2, sticky="w")
+                    ctk.CTkLabel(frame, text="Despl. (mV):").grid(row=5, column=0, padx=5, sticky="e")
+                    d_entry = ctk.CTkEntry(frame, width=80); d_entry.insert(0, "0"); d_entry.grid(row=5, column=1, pady=2, sticky="w")
 
-                color_row = 5 if current_tab == "Respuesta en Tiempo" else 4
+                color_row = 6 if current_tab == "Respuesta en Tiempo" else 4
                 ctk.CTkLabel(frame, text="Color:").grid(row=color_row, column=0, padx=5, sticky="e")
 
                 # Función para actualizar el color visual del menú
@@ -479,7 +485,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
                 inputs_list.append({
                     "name": col, "alias": n_entry, "scale": s_entry,
-                    "disp": d_entry, "color": color_menu, "col_idx": col_idx_entry
+                    "disp": d_entry, "color": color_menu, "col_idx": col_idx_entry,
+                    "enabled": enabled_var
                 })
         except Exception as e:
             messagebox.showerror("Error", f"Error al leer columnas: {e}")
@@ -563,7 +570,10 @@ class CSVPlotterApp(CTkWindowWithDnD):
                             xytext=(5, -15), textcoords='offset points',
                             color=color, fontsize=9, fontweight='bold')
 
-            signals = self.time_signal_inputs
+            signals = [s for s in self.time_signal_inputs if s["enabled"].get()]
+            if not signals:
+                messagebox.showwarning("Aviso", "No hay señales seleccionadas para graficar.")
+                return
 
             for pair_start in range(0, len(signals), 2):
                 pair = signals[pair_start:pair_start + 2]
