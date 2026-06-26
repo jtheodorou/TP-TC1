@@ -1,6 +1,6 @@
 LTspice 26.0.1 for Windows
-Circuit: C:\Users\Administrador\Documents\TC1\tp4\TP-TC1\transitorio.net
-Start Time: Tue Jun  9 14:30:33 2026
+Circuit: C:\Users\Administrador\Documents\TC1\tp4\TP-TC1\transitorio\transitorio.net
+Start Time: Thu Jun 25 18:03:44 2026
 solver = Normal
 Maximum thread count: 8
 tnom = 27
@@ -8,8 +8,8 @@ temp = 27
 method = trap
 .OP point found by inspection.
 .OP point found by inspection.
-Total elapsed time: 0.657 seconds.
+Total elapsed time: 0.224 seconds.
 
 Files loaded:
-C:\Users\Administrador\Documents\TC1\tp4\TP-TC1\transitorio.net
+C:\Users\Administrador\Documents\TC1\tp4\TP-TC1\transitorio\transitorio.net
 

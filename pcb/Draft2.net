@@ -1,0 +1,7 @@
+*
+R1 N002 N001 1k
+C1 N002 0 1µ
+V1 N001 0 AC 1 0
+.ac dec 100 10 1meg
+.backanno
+.end
