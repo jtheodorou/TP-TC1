@@ -1,4 +1,5 @@
 import math
+import os
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 import pandas as pd
@@ -20,6 +21,15 @@ NICE_STEPS_FREQ = [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 20, 25, 50, 100, 200]
 PEAK_BOX = dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='gray', alpha=0.85)
 
 
+def _n_bounds(y_min, y_max, div):
+    return (math.ceil(max(-y_min, 0) / div) + 1,
+            math.ceil(max(y_max, 0) / div) + 1)
+
+
+def _build_ticks(div, n_below, n_above):
+    return [round((-n_below + i) * div, 10) for i in range(n_below + n_above + 1)]
+
+
 class CTkWindowWithDnD(ctk.CTk, TkinterDnD.DnDWrapper):
     def __init__(self, *args, **kwargs):
         ctk.CTk.__init__(self, *args, **kwargs)
@@ -37,7 +47,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.lissajous_file_path = ""
         self.time_signal_inputs = []
         self.freq_signal_inputs = []
-        self.lissajous_columns = []
 
         self._build_selection_screen()
         self._build_tabs()
@@ -104,7 +113,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
     def _setup_time_ui(self, parent):
         self._tab_header(parent, "time_path_label")
-
         self._enter_hint(parent)
 
         self.time_scroll_frame = ctk.CTkScrollableFrame(
@@ -160,10 +168,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.grid_spacing_y_entry = ctk.CTkEntry(sf, width=50)
         self.grid_spacing_y_entry.pack(side="left", padx=2)
 
-
     def _setup_freq_ui(self, parent):
         self._tab_header(parent, "freq_path_label")
-
         self._enter_hint(parent)
 
         mf = ctk.CTkFrame(parent)
@@ -214,7 +220,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.freq_signal_width_entry = ctk.CTkEntry(wf, width=45)
         self.freq_signal_width_entry.insert(0, "1.5")
         self.freq_signal_width_entry.pack(side="left", padx=2)
-
 
     def _setup_lissajous_ui(self, parent):
         self._tab_header(parent, "lissajous_path_label")
@@ -271,7 +276,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.lissajous_signal_width_entry.insert(0, "1.2")
         self.lissajous_signal_width_entry.pack(side="left", padx=3)
 
-
     # ── Event handlers ────────────────────────────────────────────────────────
 
     def _on_enter(self, event):
@@ -308,7 +312,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
     def load_csv(self, path):
         tab = self.tabview.get()
-        short = path.replace("\\", "/").split("/")[-1]
+        short = os.path.basename(path)
         if tab == "Respuesta en Tiempo":
             self.time_file_path = path
             self.time_path_label.configure(text=f"Cargado: {short}", text_color="black")
@@ -417,25 +421,22 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 y_range = max(y_max - y_min, 1e-9)
                 return min(NICE_STEPS_TIME, key=lambda s: abs(s - y_range / 6))
 
-            def n_bounds(y_min, y_max, div):
-                return (math.ceil(max(-y_min, 0) / div) + 1,
-                        math.ceil(max(y_max, 0) / div) + 1)
-
-            def build_ticks(div, n_below, n_above):
-                return [round((-n_below + i) * div, 10) for i in range(n_below + n_above + 1)]
-
             def parse_sig(sig):
                 scale = self._try_float(sig["scale"], 1.0)
                 disp = self._try_float(sig["disp"], 0.0)
                 col_idx = int(sig["col_idx"].get()) if sig["col_idx"] else None
-                y = (df.iloc[:, col_idx] if col_idx is not None else df[sig["name"]])
+                y = df.iloc[:, col_idx] if col_idx is not None else df[sig["name"]]
                 return scale, (y * UNIT_MULTIPLIERS[u_y] + disp) * scale
 
             def mark_peaks(ax, y_data, sig, scale):
                 color, alias = sig["color"].get(), sig["alias"].get()
                 max_idx, min_idx = y_data.idxmax(), y_data.idxmin()
-                ax.plot(x_data[max_idx], y_data[max_idx], 'o', markerfacecolor='white', markeredgecolor=color, markeredgewidth=2, markersize=8, zorder=5)
-                ax.plot(x_data[min_idx], y_data[min_idx], 'o', markerfacecolor='white', markeredgecolor=color, markeredgewidth=2, markersize=8, zorder=5)
+                ax.plot(
+                    [x_data[max_idx], x_data[min_idx]],
+                    [y_data[max_idx], y_data[min_idx]],
+                    'o', markerfacecolor='white', markeredgecolor=color,
+                    markeredgewidth=2, markersize=8, zorder=5,
+                )
                 return (f"{alias} Máx: {y_data[max_idx]/scale:.3g} {u_y}  @  {x_data[max_idx]:.4g} {u_x}\n"
                         f"{alias} Mín:  {y_data[min_idx]/scale:.3g} {u_y}  @  {x_data[min_idx]:.4g} {u_x}")
 
@@ -464,8 +465,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
                     all_min = float(y1.min()) if y2 is None else float(min(y1.min(), y2.min()))
                     all_max = float(y1.max()) if y2 is None else float(max(y1.max(), y2.max()))
                     div = resolve_div(scale1, all_min, all_max)
-                    nb, na = n_bounds(all_min, all_max, div)
-                    ticks = build_ticks(div, nb, na)
+                    nb, na = _n_bounds(all_min, all_max, div)
+                    ticks = _build_ticks(div, nb, na)
 
                     line1, = ax1.plot(x_data, y1, color=sig1["color"].get(),
                                       linewidth=s_width, label=sig1["alias"].get())
@@ -490,17 +491,11 @@ class CSVPlotterApp(CTkWindowWithDnD):
                                  fontsize=9, verticalalignment='bottom', fontfamily='monospace',
                                  bbox=PEAK_BOX)
                 else:
-                    # Ambas señales comparten el mismo rango plotteado (combinado)
-                    # para que scale=2 haga la señal exactamente 2x más grande.
                     comb_min = float(min(y1.min(), y2.min()))
                     comb_max = float(max(y1.max(), y2.max()))
-                    comb_range = max(comb_max - comb_min, 1e-9)
-                    if base_div is not None:
-                        div = base_div
-                    else:
-                        div = min(NICE_STEPS_TIME, key=lambda s: abs(s - comb_range / 6))
-                    nb, na = n_bounds(comb_min, comb_max, div)
-                    ticks = build_ticks(div, nb, na)
+                    div = resolve_div(1, comb_min, comb_max)
+                    nb, na = _n_bounds(comb_min, comb_max, div)
+                    ticks = _build_ticks(div, nb, na)
 
                     line1, = ax1.plot(x_data, y1, color=sig1["color"].get(),
                                       linewidth=s_width, label=sig1["alias"].get())
@@ -579,8 +574,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                                     label=g_config["alias"].get())
             ax1.set_ylabel(f'{g_config["alias"].get()} (dB)', color=g_color)
             ax1.tick_params(axis='y', labelcolor=g_color)
-            ax1.grid(True, which='both', linestyle='--',
-                     alpha=0.6, linewidth=fg_width)
+            ax1.grid(True, which='both', linestyle='--', alpha=0.6, linewidth=fg_width)
 
             line_p, = ax2.semilogx(f_data, p_data, color=p_color, linewidth=fs_width,
                                     label=p_config["alias"].get())
@@ -588,7 +582,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
             ax2.tick_params(axis='y', labelcolor=p_color)
             ax1.set_xlabel('Frecuencia (Hz)')
 
-            # Build synchronized ticks: phase in 15° steps, gain matched in count
             step_p = 15
             p_min, p_max = float(p_data.min()), float(p_data.max())
             p_range = max(p_max - p_min, 1.0)
@@ -627,8 +620,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
                     (ax1, [idx_max_g, idx_min_g], g_data, g_color),
                     (ax2, [idx_max_p, idx_min_p], p_data, p_color),
                 ]:
-                    for idx in idxs:
-                        ax.plot(f_data[idx], ys[idx], 'o', markerfacecolor='white', markeredgecolor=color, markeredgewidth=2, markersize=8, zorder=5)
+                    ax.plot(f_data[idxs], ys[idxs], 'o', markerfacecolor='white',
+                            markeredgecolor=color, markeredgewidth=2, markersize=8, zorder=5)
 
                 info = (
                     f"Gan Máx: {g_data[idx_max_g]:.2g} dB  @  {f_data[idx_max_g]:.4g} Hz\n"
@@ -679,7 +672,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
             ax.set_xlabel(f"{x_col} ({u_x})")
             ax.set_ylabel(f"{y_col} ({u_y})")
             ax.set_title(self.lissajous_title_entry.get() or "Figura de Lissajous")
-
             ax.grid(True, linestyle='--', alpha=0.6)
             if self.lissajous_equal_aspect_var.get():
                 ax.set_aspect('equal', adjustable='box')
@@ -703,7 +695,6 @@ class CSVPlotterApp(CTkWindowWithDnD):
             messagebox.showerror("Error", "No se pudieron leer columnas del archivo.")
             return
 
-        self.lissajous_columns = cols
         self.lissajous_x_menu.configure(values=cols)
         self.lissajous_y_menu.configure(values=cols)
         self.lissajous_x_menu.set(cols[1] if len(cols) > 1 else cols[0])
