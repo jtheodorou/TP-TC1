@@ -119,12 +119,12 @@ class CSVPlotterApp(CTkWindowWithDnD):
             parent, width=500, height=180, label_text="Configuración por Señal")
         self.time_scroll_frame.pack(pady=5, padx=10)
 
-        opts = ctk.CTkScrollableFrame(parent, height=105, label_text="Opciones del Gráfico")
+        opts = ctk.CTkScrollableFrame(parent, height=150, label_text="Opciones del Gráfico")
         opts.pack(pady=2, padx=10, fill="x")
-        opts.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1, uniform="col")
+        opts.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="col")
 
         tr = ctk.CTkFrame(opts, fg_color="transparent")
-        tr.grid(row=0, column=0, columnspan=6, pady=2)
+        tr.grid(row=0, column=0, columnspan=4, pady=2)
         ctk.CTkLabel(tr, text="Título:").pack(side="left", padx=5)
         self.title_entry = ctk.CTkEntry(tr, width=200, placeholder_text="Nombre del gráfico...")
         self.title_entry.insert(0, "Osciloscopio - Señales")
@@ -141,32 +141,34 @@ class CSVPlotterApp(CTkWindowWithDnD):
             ctk.CTkCheckBox(opts, text=text, variable=var).grid(row=1, column=col, padx=5, pady=4)
 
         wf = ctk.CTkFrame(opts, fg_color="transparent")
-        wf.grid(row=1, column=5, padx=5, pady=4)
-        ctk.CTkLabel(wf, text="Grilla:").pack(side="left")
+        wf.grid(row=2, column=0, columnspan=4, pady=2)
+        ctk.CTkLabel(wf, text="Grosor grilla:").pack(side="left", padx=(4, 2))
         self.grid_width_entry = ctk.CTkEntry(wf, width=45)
         self.grid_width_entry.insert(0, "0.6")
-        self.grid_width_entry.pack(side="left", padx=(2, 5))
-        ctk.CTkLabel(wf, text="Señal:").pack(side="left")
+        self.grid_width_entry.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(wf, text="Grosor señal:").pack(side="left", padx=(0, 2))
         self.time_signal_width_entry = ctk.CTkEntry(wf, width=45)
         self.time_signal_width_entry.insert(0, "1.5")
-        self.time_signal_width_entry.pack(side="left", padx=2)
+        self.time_signal_width_entry.pack(side="left")
 
         sf = ctk.CTkFrame(opts, fg_color="transparent")
-        sf.grid(row=2, column=0, columnspan=6, pady=4)
-        ctk.CTkLabel(sf, text="Eje X:").pack(side="left", padx=2)
+        sf.grid(row=3, column=0, columnspan=4, pady=2)
+
+        ctk.CTkLabel(sf, text="Eje X:").grid(row=0, column=0, padx=(4, 2), sticky="e")
         self.unit_x_menu = ctk.CTkOptionMenu(sf, values=["s", "ms", "µs", "ns", "ps"], width=75)
         self.unit_x_menu.set("µs")
-        self.unit_x_menu.pack(side="left", padx=2)
-        ctk.CTkLabel(sf, text="Div:").pack(side="left", padx=2)
+        self.unit_x_menu.grid(row=0, column=1, padx=2)
+        ctk.CTkLabel(sf, text="Div:").grid(row=0, column=2, padx=2, sticky="e")
         self.grid_spacing_x_entry = ctk.CTkEntry(sf, width=50)
-        self.grid_spacing_x_entry.pack(side="left", padx=2)
-        ctk.CTkLabel(sf, text="   Eje Y:").pack(side="left", padx=2)
+        self.grid_spacing_x_entry.grid(row=0, column=3, padx=2)
+
+        ctk.CTkLabel(sf, text="Eje Y:").grid(row=1, column=0, padx=(4, 2), sticky="e")
         self.unit_y_menu = ctk.CTkOptionMenu(sf, values=["V", "mV", "µV"], width=75)
         self.unit_y_menu.set("mV")
-        self.unit_y_menu.pack(side="left", padx=2)
-        ctk.CTkLabel(sf, text="Div:").pack(side="left", padx=2)
+        self.unit_y_menu.grid(row=1, column=1, padx=2)
+        ctk.CTkLabel(sf, text="Div:").grid(row=1, column=2, padx=2, sticky="e")
         self.grid_spacing_y_entry = ctk.CTkEntry(sf, width=50)
-        self.grid_spacing_y_entry.pack(side="left", padx=2)
+        self.grid_spacing_y_entry.grid(row=1, column=3, padx=2)
 
     def _setup_freq_ui(self, parent):
         self._tab_header(parent, "freq_path_label")
@@ -192,7 +194,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
             parent, width=500, height=150, label_text="Configuración por Señal")
         self.freq_scroll_frame.pack(pady=5, padx=10)
 
-        opts = ctk.CTkScrollableFrame(parent, height=140, label_text="Opciones de Frecuencia")
+        opts = ctk.CTkScrollableFrame(parent, height=125, label_text="Opciones de Frecuencia")
         opts.pack(pady=2, padx=10, fill="x")
         opts.grid_columnconfigure((0, 1), weight=1, uniform="col")
 
@@ -211,15 +213,15 @@ class CSVPlotterApp(CTkWindowWithDnD):
             row=1, column=1, padx=10, pady=2, sticky="w")
 
         wf = ctk.CTkFrame(opts, fg_color="transparent")
-        wf.grid(row=2, column=1, padx=10, pady=2, sticky="w")
-        ctk.CTkLabel(wf, text="Grilla:").pack(side="left")
+        wf.grid(row=2, column=0, columnspan=2, pady=2)
+        ctk.CTkLabel(wf, text="Grosor grilla:").pack(side="left", padx=(4, 2))
         self.freq_grid_width_entry = ctk.CTkEntry(wf, width=45)
         self.freq_grid_width_entry.insert(0, "0.6")
-        self.freq_grid_width_entry.pack(side="left", padx=(2, 5))
-        ctk.CTkLabel(wf, text="Señal:").pack(side="left")
+        self.freq_grid_width_entry.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(wf, text="Grosor señal:").pack(side="left", padx=(0, 2))
         self.freq_signal_width_entry = ctk.CTkEntry(wf, width=45)
         self.freq_signal_width_entry.insert(0, "1.5")
-        self.freq_signal_width_entry.pack(side="left", padx=2)
+        self.freq_signal_width_entry.pack(side="left")
 
     def _setup_lissajous_ui(self, parent):
         self._tab_header(parent, "lissajous_path_label")
@@ -238,12 +240,12 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
         self._enter_hint(parent, "Presioná Enter para generar la figura")
 
-        opts = ctk.CTkScrollableFrame(parent, height=130, label_text="Opciones del Gráfico")
+        opts = ctk.CTkScrollableFrame(parent, height=155, label_text="Opciones del Gráfico")
         opts.pack(pady=5, padx=10, fill="x")
-        opts.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="col")
+        opts.grid_columnconfigure((0, 1, 2), weight=1, uniform="col")
 
         tr = ctk.CTkFrame(opts, fg_color="transparent")
-        tr.grid(row=0, column=0, columnspan=4, pady=2)
+        tr.grid(row=0, column=0, columnspan=3, pady=2)
         ctk.CTkLabel(tr, text="Título:").pack(side="left", padx=5)
         self.lissajous_title_entry = ctk.CTkEntry(tr, width=200, placeholder_text="Nombre del gráfico...")
         self.lissajous_title_entry.insert(0, "Figura de Lissajous")
@@ -251,30 +253,27 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
         self.lissajous_show_cursors_var = ctk.BooleanVar(value=True)
         self.lissajous_equal_aspect_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(opts, text="Ver Cursores", variable=self.lissajous_show_cursors_var).grid(
-            row=1, column=1, padx=5, pady=4)
-        ctk.CTkCheckBox(opts, text="Aspecto 1:1", variable=self.lissajous_equal_aspect_var).grid(
-            row=1, column=2, padx=5, pady=4)
-
-        cf2 = ctk.CTkFrame(opts, fg_color="transparent")
-        cf2.grid(row=1, column=3, padx=5, pady=4)
-        ctk.CTkLabel(cf2, text="Color:").pack(side="left")
-        self.lissajous_color_menu = self._make_color_menu(cf2)
-        self.lissajous_color_menu.pack(side="left", padx=5)
+        r1 = ctk.CTkFrame(opts, fg_color="transparent")
+        r1.grid(row=1, column=0, columnspan=3, pady=4)
+        ctk.CTkCheckBox(r1, text="Ver Cursores", variable=self.lissajous_show_cursors_var).pack(side="left", padx=8)
+        ctk.CTkCheckBox(r1, text="Aspecto 1:1", variable=self.lissajous_equal_aspect_var).pack(side="left", padx=8)
+        ctk.CTkLabel(r1, text="Color:").pack(side="left", padx=(8, 2))
+        self.lissajous_color_menu = self._make_color_menu(r1)
+        self.lissajous_color_menu.pack(side="left", padx=(0, 8))
 
         ur = ctk.CTkFrame(opts, fg_color="transparent")
-        ur.grid(row=2, column=0, columnspan=4, pady=4)
-        for lbl, attr, default in [("Unidad X:", "lissajous_unit_x", "mV"),
-                                    ("Unidad Y:", "lissajous_unit_y", "mV")]:
-            ctk.CTkLabel(ur, text=lbl).pack(side="left", padx=3)
-            menu = ctk.CTkOptionMenu(ur, values=["V", "mV", "µV", "nV"], width=75)
-            menu.set(default)
-            menu.pack(side="left", padx=3)
-            setattr(self, attr, menu)
-        ctk.CTkLabel(ur, text="  Grosor señal:").pack(side="left", padx=3)
-        self.lissajous_signal_width_entry = ctk.CTkEntry(ur, width=50)
+        ur.grid(row=2, column=0, columnspan=3, pady=2)
+        ctk.CTkLabel(ur, text="Unidad:").pack(side="left", padx=3)
+        self.lissajous_unit_y = ctk.CTkOptionMenu(ur, values=["V", "mV", "µV", "nV"], width=75)
+        self.lissajous_unit_y.set("mV")
+        self.lissajous_unit_y.pack(side="left", padx=3)
+
+        gr = ctk.CTkFrame(opts, fg_color="transparent")
+        gr.grid(row=3, column=0, columnspan=3, pady=2)
+        ctk.CTkLabel(gr, text="Grosor señal:").pack(side="left", padx=(4, 2))
+        self.lissajous_signal_width_entry = ctk.CTkEntry(gr, width=50)
         self.lissajous_signal_width_entry.insert(0, "1.2")
-        self.lissajous_signal_width_entry.pack(side="left", padx=3)
+        self.lissajous_signal_width_entry.pack(side="left")
 
     # ── Event handlers ────────────────────────────────────────────────────────
 
@@ -372,7 +371,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 if is_time:
                     for lbl, default in [("Columna (idx):", str(1 + i)),
                                          ("Escala:", "1"),
-                                         ("Despl. (V):", "0")]:
+                                         ("Despl. (mV):", "0")]:
                         ctk.CTkLabel(frame, text=lbl).grid(row=row, column=0, padx=5, sticky="e")
                         e = ctk.CTkEntry(frame, width=80)
                         e.insert(0, default)
@@ -426,7 +425,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 disp = self._try_float(sig["disp"], 0.0)
                 col_idx = int(sig["col_idx"].get()) if sig["col_idx"] else None
                 y = df.iloc[:, col_idx] if col_idx is not None else df[sig["name"]]
-                return scale, (y * UNIT_MULTIPLIERS[u_y] + disp) * scale
+                return scale, (y * UNIT_MULTIPLIERS[u_y] + disp * UNIT_MULTIPLIERS[u_y] / UNIT_MULTIPLIERS["mV"]) * scale
 
             def mark_peaks(ax, y_data, sig, scale):
                 color, alias = sig["color"].get(), sig["alias"].get()
@@ -567,6 +566,13 @@ class CSVPlotterApp(CTkWindowWithDnD):
             fg_width = self._try_float(self.freq_grid_width_entry, 0.6)
             fs_width = self._try_float(self.freq_signal_width_entry, 1.5)
 
+            def fmt_freq(f):
+                if f >= 1e6:
+                    return f"{f/1e6:.4g} MHz"
+                if f >= 1e3:
+                    return f"{f/1e3:.4g} kHz"
+                return f"{f:.4g} Hz"
+
             fig, ax1 = plt.subplots(figsize=(10, 6))
             ax2 = ax1.twinx()
 
@@ -624,10 +630,10 @@ class CSVPlotterApp(CTkWindowWithDnD):
                             markeredgecolor=color, markeredgewidth=2, markersize=8, zorder=5)
 
                 info = (
-                    f"Gan Máx: {g_data[idx_max_g]:.2g} dB  @  {f_data[idx_max_g]:.4g} Hz\n"
-                    f"Gan Mín:  {g_data[idx_min_g]:.2g} dB  @  {f_data[idx_min_g]:.4g} Hz\n"
-                    f"Fase Máx: {p_data[idx_max_p]:.1f}°  @  {f_data[idx_max_p]:.4g} Hz\n"
-                    f"Fase Mín:  {p_data[idx_min_p]:.1f}°  @  {f_data[idx_min_p]:.4g} Hz"
+                    f"Gan Máx: {g_data[idx_max_g]:.2g} dB  @  {fmt_freq(f_data[idx_max_g])}\n"
+                    f"Gan Mín:  {g_data[idx_min_g]:.2g} dB  @  {fmt_freq(f_data[idx_min_g])}\n"
+                    f"Fase Máx: {p_data[idx_max_p]:.1f}°  @  {fmt_freq(f_data[idx_max_p])}\n"
+                    f"Fase Mín:  {p_data[idx_min_p]:.1f}°  @  {fmt_freq(f_data[idx_min_p])}"
                 )
                 ax1.text(0.02, 0.02, info, transform=ax1.transAxes,
                          fontsize=9, verticalalignment='bottom', fontfamily='monospace',
@@ -661,15 +667,14 @@ class CSVPlotterApp(CTkWindowWithDnD):
                 messagebox.showerror("Error", f"Columnas '{x_col}' o '{y_col}' no encontradas.")
                 return
 
-            u_x = self.lissajous_unit_x.get()
             u_y = self.lissajous_unit_y.get()
-            x_data = df[x_col] * UNIT_MULTIPLIERS[u_x]
+            x_data = df[x_col] * UNIT_MULTIPLIERS[u_y]
             y_data = df[y_col] * UNIT_MULTIPLIERS[u_y]
             ls_width = self._try_float(self.lissajous_signal_width_entry, 1.2)
 
             fig, ax = plt.subplots(figsize=(7, 7))
             line, = ax.plot(x_data, y_data, color=self.lissajous_color_menu.get(), linewidth=ls_width)
-            ax.set_xlabel(f"{x_col} ({u_x})")
+            ax.set_xlabel(f"{x_col} ({u_y})")
             ax.set_ylabel(f"{y_col} ({u_y})")
             ax.set_title(self.lissajous_title_entry.get() or "Figura de Lissajous")
             ax.grid(True, linestyle='--', alpha=0.6)
@@ -695,10 +700,11 @@ class CSVPlotterApp(CTkWindowWithDnD):
             messagebox.showerror("Error", "No se pudieron leer columnas del archivo.")
             return
 
-        self.lissajous_x_menu.configure(values=cols)
-        self.lissajous_y_menu.configure(values=cols)
-        self.lissajous_x_menu.set(cols[1] if len(cols) > 1 else cols[0])
-        self.lissajous_y_menu.set(cols[2] if len(cols) > 2 else cols[-1])
+        ch_cols = cols[1:] if len(cols) > 1 else cols
+        self.lissajous_x_menu.configure(values=ch_cols)
+        self.lissajous_y_menu.configure(values=ch_cols)
+        self.lissajous_x_menu.set(ch_cols[0])
+        self.lissajous_y_menu.set(ch_cols[1] if len(ch_cols) > 1 else ch_cols[0])
 
 
 if __name__ == "__main__":
