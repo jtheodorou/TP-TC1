@@ -126,11 +126,9 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.log_y_var = ctk.BooleanVar(value=False)
         self.show_peaks_var = ctk.BooleanVar(value=True)
         self.show_cursors_var = ctk.BooleanVar(value=True)
-        self.show_grid_var = ctk.BooleanVar(value=True)
         for col, (text, var) in enumerate([
             ("Eje X Log", self.log_x_var), ("Eje Y Log", self.log_y_var),
             ("Ver Max/Min", self.show_peaks_var), ("Ver Cursores", self.show_cursors_var),
-            ("Ver Grilla", self.show_grid_var),
         ]):
             ctk.CTkCheckBox(opts, text=text, variable=var).grid(row=1, column=col, padx=5, pady=4)
 
@@ -201,13 +199,10 @@ class CSVPlotterApp(CTkWindowWithDnD):
 
         self.freq_show_peaks_var = ctk.BooleanVar(value=True)
         self.freq_show_cursors_var = ctk.BooleanVar(value=True)
-        self.freq_show_grid_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(opts, text="Ver Max/Min", variable=self.freq_show_peaks_var).grid(
             row=1, column=0, padx=10, pady=2, sticky="e")
         ctk.CTkCheckBox(opts, text="Ver Cursores", variable=self.freq_show_cursors_var).grid(
             row=1, column=1, padx=10, pady=2, sticky="w")
-        ctk.CTkCheckBox(opts, text="Ver Grilla", variable=self.freq_show_grid_var).grid(
-            row=2, column=0, padx=10, pady=2, sticky="e")
 
         wf = ctk.CTkFrame(opts, fg_color="transparent")
         wf.grid(row=2, column=1, padx=10, pady=2, sticky="w")
@@ -249,11 +244,8 @@ class CSVPlotterApp(CTkWindowWithDnD):
         self.lissajous_title_entry.insert(0, "Figura de Lissajous")
         self.lissajous_title_entry.pack(side="left", padx=5)
 
-        self.lissajous_show_grid_var = ctk.BooleanVar(value=True)
         self.lissajous_show_cursors_var = ctk.BooleanVar(value=True)
         self.lissajous_equal_aspect_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(opts, text="Ver Grilla", variable=self.lissajous_show_grid_var).grid(
-            row=1, column=0, padx=5, pady=4)
         ctk.CTkCheckBox(opts, text="Ver Cursores", variable=self.lissajous_show_cursors_var).grid(
             row=1, column=1, padx=5, pady=4)
         ctk.CTkCheckBox(opts, text="Aspecto 1:1", variable=self.lissajous_equal_aspect_var).grid(
@@ -488,7 +480,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                     ax1.set_yticks(ticks)
                     ax1.set_ylim(ticks[0] - div * 0.5, ticks[-1] + div * 0.5)
                     ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _, s=scale1: f'{v/s:g}'))
-                    ax1.grid(self.show_grid_var.get(), linestyle='--', alpha=0.6, linewidth=g_width)
+                    ax1.grid(True, linestyle='--', alpha=0.6, linewidth=g_width)
 
                     if self.show_peaks_var.get():
                         peak_lines = [mark_peaks(ax1, y1, sig1, scale1)]
@@ -518,7 +510,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                     ax1.set_yticks(ticks)
                     ax1.set_ylim(ticks[0] - div * 0.5, ticks[-1] + div * 0.5)
                     ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _, s=scale1: f'{v/s:g}'))
-                    ax1.grid(self.show_grid_var.get(), linestyle='--', alpha=0.6, linewidth=g_width)
+                    ax1.grid(True, linestyle='--', alpha=0.6, linewidth=g_width)
                     lines = [line1]
 
                     ax2 = ax1.twinx()
@@ -587,7 +579,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
                                     label=g_config["alias"].get())
             ax1.set_ylabel(f'{g_config["alias"].get()} (dB)', color=g_color)
             ax1.tick_params(axis='y', labelcolor=g_color)
-            ax1.grid(self.freq_show_grid_var.get(), which='both', linestyle='--',
+            ax1.grid(True, which='both', linestyle='--',
                      alpha=0.6, linewidth=fg_width)
 
             line_p, = ax2.semilogx(f_data, p_data, color=p_color, linewidth=fs_width,
@@ -688,8 +680,7 @@ class CSVPlotterApp(CTkWindowWithDnD):
             ax.set_ylabel(f"{y_col} ({u_y})")
             ax.set_title(self.lissajous_title_entry.get() or "Figura de Lissajous")
 
-            if self.lissajous_show_grid_var.get():
-                ax.grid(True, linestyle='--', alpha=0.6)
+            ax.grid(True, linestyle='--', alpha=0.6)
             if self.lissajous_equal_aspect_var.get():
                 ax.set_aspect('equal', adjustable='box')
             if self.lissajous_show_cursors_var.get():
